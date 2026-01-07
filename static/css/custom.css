@@ -1,0 +1,196 @@
+/* Custom Spotify Data Tool Styles */
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Loading states */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.animate-shimmer {
+    background: linear-gradient(
+        to right,
+        #f6f7f8 0%,
+        #edeef1 20%,
+        #f6f7f8 40%,
+        #f6f7f8 100%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 2s linear infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Card hover effects */
+.card-hover {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Spotify green glow effect */
+.spotify-glow {
+    box-shadow: 0 0 20px rgba(29, 185, 84, 0.3);
+}
+
+/* Custom button styles */
+.btn-spotify {
+    background-color: #1DB954;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-spotify:hover {
+    background-color: #1ed760;
+    transform: scale(1.05);
+}
+
+.btn-spotify:active {
+    transform: scale(0.95);
+}
+
+/* Modal transitions */
+.modal-enter {
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Chart container */
+.chart-container {
+    position: relative;
+    height: 400px;
+    width: 100%;
+}
+
+/* Gradient backgrounds */
+.gradient-spotify {
+    background: linear-gradient(135deg, #1DB954 0%, #1ed760 100%);
+}
+
+.gradient-blue {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.gradient-purple {
+    background: linear-gradient(135deg, #a855f7 0%, #c084fc 100%);
+}
+
+.gradient-orange {
+    background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+}
+
+/* Stats card animation */
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-in-up {
+    animation: slideInUp 0.3s ease-out;
+}
+
+/* Table row hover effect */
+tr.table-row-hover {
+    transition: background-color 0.15s ease-in-out;
+}
+
+tr.table-row-hover:hover {
+    background-color: #f9fafb;
+}
+
+/* Pulse animation for loading */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom focus styles for accessibility */
+*:focus {
+    outline: 2px solid #1DB954;
+    outline-offset: 2px;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+    outline: 2px solid #1DB954;
+    outline-offset: 2px;
+}
+
+/* Hide Alpine.js cloak */
+[x-cloak] {
+    display: none !important;
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+    .chart-container {
+        height: 300px;
+    }
+}
+
+/* Print styles */
+@media print {
+    nav,
+    footer,
+    button,
+    .no-print {
+        display: none !important;
+    }
+}
