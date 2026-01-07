@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Spotify Data Tool{% endblock %}
+
+{% block content %}
+<div x-data="analyticsData()">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">Analytics Dashboard</h1>
+        <p class="text-gray-600">Explore your listening habits and discover insights</p>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+         hx-get="/api/analytics/overview"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <!-- Loading state -->
+        <div class="bg-white rounded-lg shadow-md p-6 animate-pulse">
+            <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+            <div class="h-8 bg-gray-200 rounded w-3/4"></div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="space-y-8">
+        <!-- Most Common Tracks by Playlist -->
+        <div class="bg-white shadow-md rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-semibold text-gray-800">Most Common Tracks</h2>
+                <span class="text-sm text-gray-500">By playlist appearance</span>
+            </div>
+            <div class="mb-6">
+                <canvas id="playlist-chart" class="w-full" style="max-height: 600px;"></canvas>
+            </div>
+        </div>
+
+        <!-- Most Played Tracks -->
+        <div class="bg-white shadow-md rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-semibold text-gray-800">Most Played Tracks</h2>
+                <span class="text-sm text-gray-500">From streaming history</span>
+            </div>
+            <div class="mb-6">
+                <canvas id="plays-chart" class="w-full" style="max-height: 600px;"></canvas>
+            </div>
+        </div>
+
+        <!-- Top Artists -->
+        <div class="bg-white shadow-md rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-semibold text-gray-800">Top Artists</h2>
+                <span class="text-sm text-gray-500">By play count</span>
+            </div>
+            <div class="mb-6">
+                <canvas id="artists-chart" class="w-full" style="max-height: 600px;"></canvas>
+            </div>
+        </div>
+
+        <!-- Listening Time Stats -->
+        <div class="bg-white shadow-md rounded-lg p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Listening Time Statistics</h2>
+            <div hx-get="/api/analytics/listening-time-stats"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="animate-pulse grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="h-20 bg-gray-200 rounded"></div>
+                    <div class="h-20 bg-gray-200 rounded"></div>
+                    <div class="h-20 bg-gray-200 rounded"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function analyticsData() {
+    return {
+        playlistChart: null,
+        playsChart: null,
+        artistsChart: null,
+
+        init() {
+            this.loadAllCharts();
+
+            // Listen for stats loading
+            document.body.addEventListener('htmx:afterSwap', (event) => {
+                if (event.detail.target.getAttribute('hx-get') === '/api/analytics/overview') {
+                    this.renderStatsCards(event.detail.xhr.response);
+                } else if (event.detail.target.getAttribute('hx-get') === '/api/analytics/listening-time-stats') {
+                    this.renderTimeStats(event.detail.xhr.response, event.detail.target);
+                }
+            });
+        },
+
+        async loadAllCharts() {
+            await Promise.all([
+                this.loadPlaylistChart(),
+                this.loadPlaysChart(),
+                this.loadArtistsChart()
+            ]);
+        },
+
+        async loadPlaylistChart() {
+            const response = await fetch('/api/analytics/top-tracks-by-playlist?limit=20');
+            const data = await response.json();
+
+            const ctx = document.getElementById('playlist-chart').getContext('2d');
+            this.playlistChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => `${d.track_name} - ${d.artist_name}`),
+                    datasets: [{
+                        label: 'Playlist Count',
+                        data: data.map(d => d.playlist_count),
+                        backgroundColor: 'rgba(29, 185, 84, 0.6)',
+                        borderColor: 'rgba(29, 185, 84, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        async loadPlaysChart() {
+            const response = await fetch('/api/analytics/top-tracks-by-plays?limit=20');
+            const data = await response.json();
+
+            const ctx = document.getElementById('plays-chart').getContext('2d');
+            this.playsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => `${d.track_name} - ${d.artist_name}`),
+                    datasets: [{
+                        label: 'Play Count',
+                        data: data.map(d => d.play_count),
+                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        async loadArtistsChart() {
+            const response = await fetch('/api/analytics/top-artists?limit=15');
+            const data = await response.json();
+
+            const ctx = document.getElementById('artists-chart').getContext('2d');
+            this.artistsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.artist_name),
+                    datasets: [{
+                        label: 'Play Count',
+                        data: data.map(d => d.play_count),
+                        backgroundColor: 'rgba(168, 85, 247, 0.6)',
+                        borderColor: 'rgba(168, 85, 247, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        renderStatsCards(responseText) {
+            const data = JSON.parse(responseText);
+            const target = document.querySelector('[hx-get="/api/analytics/overview"]');
+
+            target.innerHTML = `
+                <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-spotify-green">
+                    <div class="text-gray-500 text-sm font-medium mb-1">Total Playlists</div>
+                    <div class="text-3xl font-bold text-gray-800">${data.playlists.total.toLocaleString()}</div>
+                    <div class="text-gray-500 text-xs mt-2">${data.playlists.total_tracks.toLocaleString()} total tracks</div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+                    <div class="text-gray-500 text-sm font-medium mb-1">Unique Tracks</div>
+                    <div class="text-3xl font-bold text-gray-800">${data.playlists.unique_tracks.toLocaleString()}</div>
+                    <div class="text-gray-500 text-xs mt-2">Avg ${data.playlists.avg_items_per_playlist.toFixed(1)} per playlist</div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                    <div class="text-gray-500 text-sm font-medium mb-1">Total Plays</div>
+                    <div class="text-3xl font-bold text-gray-800">${data.streaming.total_plays.toLocaleString()}</div>
+                    <div class="text-gray-500 text-xs mt-2">${data.streaming.avg_minutes_per_play.toFixed(1)} min avg</div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+                    <div class="text-gray-500 text-sm font-medium mb-1">Listening Time</div>
+                    <div class="text-3xl font-bold text-gray-800">${data.streaming.total_hours.toFixed(1)}h</div>
+                    <div class="text-gray-500 text-xs mt-2">${data.streaming.total_days.toFixed(1)} days</div>
+                </div>
+            `;
+        },
+
+        renderTimeStats(responseText, target) {
+            const data = JSON.parse(responseText);
+
+            target.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-gradient-to-br from-spotify-green to-green-600 text-white rounded-lg p-6">
+                        <div class="text-sm opacity-90 mb-2">Total Listening Time</div>
+                        <div class="text-4xl font-bold">${data.total_hours.toFixed(1)}</div>
+                        <div class="text-sm opacity-75 mt-1">hours (${data.total_days.toFixed(2)} days)</div>
+                    </div>
+                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg p-6">
+                        <div class="text-sm opacity-90 mb-2">Total Plays</div>
+                        <div class="text-4xl font-bold">${data.total_plays.toLocaleString()}</div>
+                        <div class="text-sm opacity-75 mt-1">streaming events</div>
+                    </div>
+                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg p-6">
+                        <div class="text-sm opacity-90 mb-2">Avg Play Duration</div>
+                        <div class="text-4xl font-bold">${data.avg_minutes_per_play.toFixed(1)}</div>
+                        <div class="text-sm opacity-75 mt-1">minutes per play</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+</script>
+{% endblock %}

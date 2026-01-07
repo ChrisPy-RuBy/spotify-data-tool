@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Playlists - Spotify Data Tool{% endblock %}
+
+{% block content %}
+<div x-data="playlistsData()">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">Playlists</h1>
+        <p class="text-gray-600">Browse and explore all your playlists</p>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex items-center space-x-4">
+            <div class="flex-1">
+                <input
+                    type="text"
+                    x-model="searchQuery"
+                    @input.debounce.500ms="searchPlaylists()"
+                    placeholder="Search playlists..."
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-spotify-green focus:border-transparent"
+                />
+            </div>
+            <button
+                @click="searchQuery = ''; loadPlaylists()"
+                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors duration-200">
+                Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Playlists Grid -->
+    <div id="playlists-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Loading state -->
+        <template x-for="i in 6" :key="i">
+            <div class="bg-white rounded-lg shadow-md p-6 animate-pulse">
+                <div class="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                <div class="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div class="h-4 bg-gray-200 rounded w-2/3"></div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Pagination -->
+    <div x-show="totalPlaylists > pageSize" class="mt-8 flex justify-center items-center space-x-4">
+        <button
+            @click="previousPage()"
+            :disabled="currentPage === 0"
+            :class="currentPage === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-spotify-green hover:text-white'"
+            class="px-4 py-2 bg-white border border-gray-300 rounded-lg transition-colors duration-200">
+            Previous
+        </button>
+        <span class="text-gray-600">
+            Page <span x-text="currentPage + 1"></span> of <span x-text="Math.ceil(totalPlaylists / pageSize)"></span>
+        </span>
+        <button
+            @click="nextPage()"
+            :disabled="(currentPage + 1) * pageSize >= totalPlaylists"
+            :class="(currentPage + 1) * pageSize >= totalPlaylists ? 'opacity-50 cursor-not-allowed' : 'hover:bg-spotify-green hover:text-white'"
+            class="px-4 py-2 bg-white border border-gray-300 rounded-lg transition-colors duration-200">
+            Next
+        </button>
+    </div>
+
+    <!-- Playlist Detail Modal -->
+    <div x-show="selectedPlaylist" x-cloak
+         @click.away="selectedPlaylist = null"
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div @click.stop class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
+            <div class="bg-spotify-green text-white p-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold" x-text="selectedPlaylist?.name"></h2>
+                    <button @click="selectedPlaylist = null" class="text-white hover:text-gray-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <p class="text-sm opacity-90 mt-2">
+                    <span x-text="selectedPlaylist?.track_count || 0"></span> tracks
+                    • Last modified: <span x-text="formatDate(selectedPlaylist?.last_modified_date)"></span>
+                </p>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-96">
+                <template x-if="selectedPlaylist?.tracks && selectedPlaylist.tracks.length > 0">
+                    <div class="space-y-2">
+                        <template x-for="(track, index) in selectedPlaylist.tracks" :key="track.track_uri">
+                            <div class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded">
+                                <div class="flex items-center space-x-3 flex-1">
+                                    <span class="text-gray-400 font-medium w-8" x-text="index + 1"></span>
+                                    <div class="flex-1">
+                                        <div class="text-gray-800 font-medium" x-text="track.track_name"></div>
+                                        <div class="text-gray-500 text-sm" x-text="track.artist_name"></div>
+                                    </div>
+                                </div>
+                                <div class="text-gray-400 text-sm" x-text="track.album_name"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="!selectedPlaylist?.tracks || selectedPlaylist.tracks.length === 0">
+                    <p class="text-gray-500 text-center py-8">No tracks in this playlist</p>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function playlistsData() {
+    return {
+        playlists: [],
+        searchQuery: '',
+        currentPage: 0,
+        pageSize: 12,
+        totalPlaylists: 0,
+        selectedPlaylist: null,
+
+        init() {
+            this.loadPlaylists();
+        },
+
+        async loadPlaylists() {
+            const offset = this.currentPage * this.pageSize;
+            const response = await fetch(`/api/playlists/?limit=${this.pageSize}&offset=${offset}`);
+            const data = await response.json();
+
+            this.playlists = data.playlists;
+            this.totalPlaylists = data.total;
+            this.renderPlaylists();
+        },
+
+        async searchPlaylists() {
+            if (this.searchQuery.trim() === '') {
+                this.loadPlaylists();
+                return;
+            }
+
+            const response = await fetch(`/api/playlists/search/by-name?query=${encodeURIComponent(this.searchQuery)}`);
+            const data = await response.json();
+
+            this.playlists = data;
+            this.totalPlaylists = data.length;
+            this.currentPage = 0;
+            this.renderPlaylists();
+        },
+
+        async viewPlaylist(playlistName) {
+            const response = await fetch(`/api/playlists/${encodeURIComponent(playlistName)}`);
+            const data = await response.json();
+            this.selectedPlaylist = data;
+        },
+
+        renderPlaylists() {
+            const container = document.getElementById('playlists-container');
+
+            if (this.playlists.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500"><p>No playlists found</p></div>';
+                return;
+            }
+
+            const html = this.playlists.map(playlist => `
+                <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+                     @click="viewPlaylist('${playlist.name.replace(/'/g, "\\'")}')">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-3 truncate">${playlist.name}</h3>
+                    <div class="space-y-2 text-sm text-gray-600">
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-4 h-4 text-spotify-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                            </svg>
+                            <span>${playlist.track_count} tracks</span>
+                        </div>
+                        ${playlist.episode_count > 0 ? `
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                            </svg>
+                            <span>${playlist.episode_count} episodes</span>
+                        </div>
+                        ` : ''}
+                        <div class="flex items-center space-x-2 text-xs text-gray-500 mt-3">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span>${this.formatDate(playlist.last_modified_date)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = html;
+        },
+
+        nextPage() {
+            if ((this.currentPage + 1) * this.pageSize < this.totalPlaylists) {
+                this.currentPage++;
+                this.loadPlaylists();
+            }
+        },
+
+        previousPage() {
+            if (this.currentPage > 0) {
+                this.currentPage--;
+                this.loadPlaylists();
+            }
+        },
+
+        formatDate(dateString) {
+            if (!dateString || dateString === 'Unknown') return 'Unknown';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            } catch {
+                return dateString;
+            }
+        }
+    }
+}
+</script>
+
+<style>
+[x-cloak] {
+    display: none !important;
+}
+</style>
+{% endblock %}
