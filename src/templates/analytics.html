@@ -5,9 +5,30 @@
 {% block content %}
 <div x-data="analyticsData()">
     <!-- Page Header -->
-    <div class="mb-8">
-        <h1 class="text-4xl font-bold text-gray-800 mb-2">Analytics Dashboard</h1>
-        <p class="text-gray-600">Explore your listening habits and discover insights</p>
+    <div class="mb-8 flex justify-between items-start">
+        <div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Analytics Dashboard</h1>
+            <p class="text-gray-600">Explore your listening habits and discover insights</p>
+        </div>
+        <!-- Export Buttons -->
+        <div class="flex space-x-2">
+            <button
+                @click="exportAllToCSV()"
+                class="px-4 py-2 bg-spotify-green text-white rounded-lg hover:bg-green-600 transition-colors duration-200 flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span>Export CSV</span>
+            </button>
+            <button
+                @click="exportAllToJSON()"
+                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200 flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span>Export JSON</span>
+            </button>
+        </div>
     </div>
 
     <!-- Overview Stats -->
@@ -27,8 +48,25 @@
         <!-- Most Common Tracks by Playlist -->
         <div class="bg-white shadow-md rounded-lg p-6">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-2xl font-semibold text-gray-800">Most Common Tracks</h2>
-                <span class="text-sm text-gray-500">By playlist appearance</span>
+                <div>
+                    <h2 class="text-2xl font-semibold text-gray-800">Most Common Tracks</h2>
+                    <span class="text-sm text-gray-500">By playlist appearance</span>
+                </div>
+                <!-- Chart Type Toggle -->
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">Chart:</span>
+                    <div class="flex rounded-lg overflow-hidden border border-gray-300">
+                        <button @click="toggleChartType('playlist', 'bar')"
+                                :class="playlistChartType === 'bar' ? 'bg-spotify-green text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors">Bar</button>
+                        <button @click="toggleChartType('playlist', 'pie')"
+                                :class="playlistChartType === 'pie' ? 'bg-spotify-green text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors border-l border-gray-300">Pie</button>
+                        <button @click="toggleChartType('playlist', 'doughnut')"
+                                :class="playlistChartType === 'doughnut' ? 'bg-spotify-green text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors border-l border-gray-300">Doughnut</button>
+                    </div>
+                </div>
             </div>
             <div class="mb-6">
                 <canvas id="playlist-chart" class="w-full" style="max-height: 600px;"></canvas>
@@ -38,8 +76,25 @@
         <!-- Most Played Tracks -->
         <div class="bg-white shadow-md rounded-lg p-6">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-2xl font-semibold text-gray-800">Most Played Tracks</h2>
-                <span class="text-sm text-gray-500">From streaming history</span>
+                <div>
+                    <h2 class="text-2xl font-semibold text-gray-800">Most Played Tracks</h2>
+                    <span class="text-sm text-gray-500">From streaming history</span>
+                </div>
+                <!-- Chart Type Toggle -->
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">Chart:</span>
+                    <div class="flex rounded-lg overflow-hidden border border-gray-300">
+                        <button @click="toggleChartType('plays', 'bar')"
+                                :class="playsChartType === 'bar' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors">Bar</button>
+                        <button @click="toggleChartType('plays', 'pie')"
+                                :class="playsChartType === 'pie' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors border-l border-gray-300">Pie</button>
+                        <button @click="toggleChartType('plays', 'doughnut')"
+                                :class="playsChartType === 'doughnut' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors border-l border-gray-300">Doughnut</button>
+                    </div>
+                </div>
             </div>
             <div class="mb-6">
                 <canvas id="plays-chart" class="w-full" style="max-height: 600px;"></canvas>
@@ -49,8 +104,25 @@
         <!-- Top Artists -->
         <div class="bg-white shadow-md rounded-lg p-6">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-2xl font-semibold text-gray-800">Top Artists</h2>
-                <span class="text-sm text-gray-500">By play count</span>
+                <div>
+                    <h2 class="text-2xl font-semibold text-gray-800">Top Artists</h2>
+                    <span class="text-sm text-gray-500">By play count</span>
+                </div>
+                <!-- Chart Type Toggle -->
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">Chart:</span>
+                    <div class="flex rounded-lg overflow-hidden border border-gray-300">
+                        <button @click="toggleChartType('artists', 'bar')"
+                                :class="artistsChartType === 'bar' ? 'bg-purple-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors">Bar</button>
+                        <button @click="toggleChartType('artists', 'pie')"
+                                :class="artistsChartType === 'pie' ? 'bg-purple-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors border-l border-gray-300">Pie</button>
+                        <button @click="toggleChartType('artists', 'doughnut')"
+                                :class="artistsChartType === 'doughnut' ? 'bg-purple-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                class="px-3 py-1 text-sm transition-colors border-l border-gray-300">Doughnut</button>
+                    </div>
+                </div>
             </div>
             <div class="mb-6">
                 <canvas id="artists-chart" class="w-full" style="max-height: 600px;"></canvas>
@@ -81,6 +153,12 @@ function analyticsData() {
         playlistChart: null,
         playsChart: null,
         artistsChart: null,
+        playlistChartType: 'bar',
+        playsChartType: 'bar',
+        artistsChartType: 'bar',
+        playlistData: [],
+        playsData: [],
+        artistsData: [],
 
         init() {
             this.loadAllCharts();
@@ -103,18 +181,117 @@ function analyticsData() {
             ]);
         },
 
+        generateColors(count) {
+            const colors = [
+                'rgba(29, 185, 84, 0.7)',
+                'rgba(59, 130, 246, 0.7)',
+                'rgba(168, 85, 247, 0.7)',
+                'rgba(249, 115, 22, 0.7)',
+                'rgba(236, 72, 153, 0.7)',
+                'rgba(34, 197, 94, 0.7)',
+                'rgba(99, 102, 241, 0.7)',
+                'rgba(245, 158, 11, 0.7)',
+                'rgba(14, 165, 233, 0.7)',
+                'rgba(239, 68, 68, 0.7)',
+                'rgba(132, 204, 22, 0.7)',
+                'rgba(217, 70, 239, 0.7)',
+                'rgba(20, 184, 166, 0.7)',
+                'rgba(251, 146, 60, 0.7)',
+                'rgba(129, 140, 248, 0.7)',
+                'rgba(52, 211, 153, 0.7)',
+                'rgba(244, 114, 182, 0.7)',
+                'rgba(96, 165, 250, 0.7)',
+                'rgba(163, 230, 53, 0.7)',
+                'rgba(251, 191, 36, 0.7)',
+            ];
+            return colors.slice(0, count);
+        },
+
+        toggleChartType(chart, type) {
+            if (chart === 'playlist') {
+                this.playlistChartType = type;
+                this.updateChart('playlist', this.playlistData, type);
+            } else if (chart === 'plays') {
+                this.playsChartType = type;
+                this.updateChart('plays', this.playsData, type);
+            } else if (chart === 'artists') {
+                this.artistsChartType = type;
+                this.updateChart('artists', this.artistsData, type);
+            }
+        },
+
+        updateChart(chartName, data, type) {
+            let chart, canvasId, labelKey, valueKey, baseColor;
+
+            if (chartName === 'playlist') {
+                chart = this.playlistChart;
+                canvasId = 'playlist-chart';
+                labelKey = d => `${d.track_name} - ${d.artist_name}`;
+                valueKey = 'playlist_count';
+                baseColor = 'rgba(29, 185, 84, 0.6)';
+            } else if (chartName === 'plays') {
+                chart = this.playsChart;
+                canvasId = 'plays-chart';
+                labelKey = d => `${d.track_name} - ${d.artist_name}`;
+                valueKey = 'play_count';
+                baseColor = 'rgba(59, 130, 246, 0.6)';
+            } else {
+                chart = this.artistsChart;
+                canvasId = 'artists-chart';
+                labelKey = d => d.artist_name;
+                valueKey = 'play_count';
+                baseColor = 'rgba(168, 85, 247, 0.6)';
+            }
+
+            // Destroy existing chart
+            if (chart) chart.destroy();
+
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const isPie = type === 'pie' || type === 'doughnut';
+            const colors = isPie ? this.generateColors(data.length) : baseColor;
+
+            const newChart = new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: data.map(labelKey),
+                    datasets: [{
+                        label: valueKey === 'playlist_count' ? 'Playlist Count' : 'Play Count',
+                        data: data.map(d => d[valueKey]),
+                        backgroundColor: colors,
+                        borderColor: isPie ? 'white' : baseColor.replace('0.6', '1'),
+                        borderWidth: isPie ? 2 : 1
+                    }]
+                },
+                options: {
+                    indexAxis: type === 'bar' ? 'y' : undefined,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: isPie, position: 'right' }
+                    },
+                    scales: isPie ? {} : {
+                        x: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
+
+            if (chartName === 'playlist') this.playlistChart = newChart;
+            else if (chartName === 'plays') this.playsChart = newChart;
+            else this.artistsChart = newChart;
+        },
+
         async loadPlaylistChart() {
             const response = await fetch('/api/analytics/top-tracks-by-playlist?limit=20');
-            const data = await response.json();
+            this.playlistData = await response.json();
 
             const ctx = document.getElementById('playlist-chart').getContext('2d');
             this.playlistChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: data.map(d => `${d.track_name} - ${d.artist_name}`),
+                    labels: this.playlistData.map(d => `${d.track_name} - ${d.artist_name}`),
                     datasets: [{
                         label: 'Playlist Count',
-                        data: data.map(d => d.playlist_count),
+                        data: this.playlistData.map(d => d.playlist_count),
                         backgroundColor: 'rgba(29, 185, 84, 0.6)',
                         borderColor: 'rgba(29, 185, 84, 1)',
                         borderWidth: 1
@@ -144,16 +321,16 @@ function analyticsData() {
 
         async loadPlaysChart() {
             const response = await fetch('/api/analytics/top-tracks-by-plays?limit=20');
-            const data = await response.json();
+            this.playsData = await response.json();
 
             const ctx = document.getElementById('plays-chart').getContext('2d');
             this.playsChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: data.map(d => `${d.track_name} - ${d.artist_name}`),
+                    labels: this.playsData.map(d => `${d.track_name} - ${d.artist_name}`),
                     datasets: [{
                         label: 'Play Count',
-                        data: data.map(d => d.play_count),
+                        data: this.playsData.map(d => d.play_count),
                         backgroundColor: 'rgba(59, 130, 246, 0.6)',
                         borderColor: 'rgba(59, 130, 246, 1)',
                         borderWidth: 1
@@ -180,16 +357,16 @@ function analyticsData() {
 
         async loadArtistsChart() {
             const response = await fetch('/api/analytics/top-artists?limit=15');
-            const data = await response.json();
+            this.artistsData = await response.json();
 
             const ctx = document.getElementById('artists-chart').getContext('2d');
             this.artistsChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: data.map(d => d.artist_name),
+                    labels: this.artistsData.map(d => d.artist_name),
                     datasets: [{
                         label: 'Play Count',
-                        data: data.map(d => d.play_count),
+                        data: this.artistsData.map(d => d.play_count),
                         backgroundColor: 'rgba(168, 85, 247, 0.6)',
                         borderColor: 'rgba(168, 85, 247, 1)',
                         borderWidth: 1
@@ -264,6 +441,55 @@ function analyticsData() {
                     </div>
                 </div>
             `;
+        },
+
+        exportAllToCSV() {
+            // Export top tracks by playlist
+            let csv = 'MOST COMMON TRACKS BY PLAYLIST\n';
+            csv += 'Track Name,Artist,Playlist Count\n';
+            this.playlistData.forEach(d => {
+                csv += `"${(d.track_name || '').replace(/"/g, '""')}","${(d.artist_name || '').replace(/"/g, '""')}",${d.playlist_count}\n`;
+            });
+
+            // Export most played tracks
+            csv += '\nMOST PLAYED TRACKS\n';
+            csv += 'Track Name,Artist,Play Count\n';
+            this.playsData.forEach(d => {
+                csv += `"${(d.track_name || '').replace(/"/g, '""')}","${(d.artist_name || '').replace(/"/g, '""')}",${d.play_count}\n`;
+            });
+
+            // Export top artists
+            csv += '\nTOP ARTISTS\n';
+            csv += 'Artist Name,Play Count\n';
+            this.artistsData.forEach(d => {
+                csv += `"${(d.artist_name || '').replace(/"/g, '""')}",${d.play_count}\n`;
+            });
+
+            this.downloadFile(csv, 'analytics-export.csv', 'text/csv');
+        },
+
+        exportAllToJSON() {
+            const data = {
+                exported_at: new Date().toISOString(),
+                most_common_tracks_by_playlist: this.playlistData,
+                most_played_tracks: this.playsData,
+                top_artists: this.artistsData
+            };
+
+            const json = JSON.stringify(data, null, 2);
+            this.downloadFile(json, 'analytics-export.json', 'application/json');
+        },
+
+        downloadFile(content, filename, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
     }
 }
