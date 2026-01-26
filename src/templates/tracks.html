@@ -5,9 +5,30 @@
 {% block content %}
 <div x-data="tracksData()">
     <!-- Page Header -->
-    <div class="mb-8">
-        <h1 class="text-4xl font-bold text-gray-800 mb-2">Tracks</h1>
-        <p class="text-gray-600">Search and explore all your tracks</p>
+    <div class="mb-8 flex justify-between items-start">
+        <div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Tracks</h1>
+            <p class="text-gray-600">Search and explore all your tracks</p>
+        </div>
+        <!-- Export Buttons -->
+        <div class="flex space-x-2">
+            <button
+                @click="exportToCSV()"
+                class="px-4 py-2 bg-spotify-green text-white rounded-lg hover:bg-green-600 transition-colors duration-200 flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span>CSV</span>
+            </button>
+            <button
+                @click="exportToJSON()"
+                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200 flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span>JSON</span>
+            </button>
+        </div>
     </div>
 
     <!-- Search Bar -->
@@ -40,9 +61,36 @@
                 <thead class="bg-gray-50 border-b border-gray-200">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Track</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Artist</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Album</th>
+                        <th @click="sortBy('track_name')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none">
+                            <div class="flex items-center space-x-1">
+                                <span>Track</span>
+                                <template x-if="sortColumn === 'track_name'">
+                                    <svg class="w-4 h-4" :class="sortDirection === 'asc' ? '' : 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                    </svg>
+                                </template>
+                            </div>
+                        </th>
+                        <th @click="sortBy('artist_name')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none">
+                            <div class="flex items-center space-x-1">
+                                <span>Artist</span>
+                                <template x-if="sortColumn === 'artist_name'">
+                                    <svg class="w-4 h-4" :class="sortDirection === 'asc' ? '' : 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                    </svg>
+                                </template>
+                            </div>
+                        </th>
+                        <th @click="sortBy('album_name')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none">
+                            <div class="flex items-center space-x-1">
+                                <span>Album</span>
+                                <template x-if="sortColumn === 'album_name'">
+                                    <svg class="w-4 h-4" :class="sortDirection === 'asc' ? '' : 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                    </svg>
+                                </template>
+                            </div>
+                        </th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
@@ -146,6 +194,8 @@ function tracksData() {
         totalTracks: 0,
         selectedTrack: null,
         loading: true,
+        sortColumn: null,
+        sortDirection: 'asc',
 
         init() {
             this.loadTracks();
@@ -160,7 +210,7 @@ function tracksData() {
             this.tracks = data.tracks;
             this.totalTracks = data.total;
             this.loading = false;
-            this.renderTracks();
+            this.applySortAndRender();
         },
 
         async searchTracks() {
@@ -177,13 +227,36 @@ function tracksData() {
             this.totalTracks = data.length;
             this.currentPage = 0;
             this.loading = false;
-            this.renderTracks();
+            this.applySortAndRender();
         },
 
         async viewTrack(trackUri) {
             const response = await fetch(`/api/tracks/${encodeURIComponent(trackUri)}`);
             const data = await response.json();
             this.selectedTrack = data;
+        },
+
+        sortBy(column) {
+            if (this.sortColumn === column) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortColumn = column;
+                this.sortDirection = 'asc';
+            }
+            this.applySortAndRender();
+        },
+
+        applySortAndRender() {
+            if (this.sortColumn) {
+                this.tracks.sort((a, b) => {
+                    const aVal = (a[this.sortColumn] || '').toLowerCase();
+                    const bVal = (b[this.sortColumn] || '').toLowerCase();
+                    if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+            this.renderTracks();
         },
 
         renderTracks() {
@@ -200,13 +273,13 @@ function tracksData() {
                     @click="viewTrack('${track.track_uri}')">
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${offset + index + 1}</td>
                     <td class="px-6 py-4">
-                        <div class="text-sm font-medium text-gray-900">${track.track_name}</div>
+                        <div class="text-sm font-medium text-gray-900">${this.escapeHtml(track.track_name)}</div>
                     </td>
                     <td class="px-6 py-4">
-                        <div class="text-sm text-gray-700">${track.artist_name}</div>
+                        <div class="text-sm text-gray-700">${this.escapeHtml(track.artist_name)}</div>
                     </td>
                     <td class="px-6 py-4">
-                        <div class="text-sm text-gray-500">${track.album_name}</div>
+                        <div class="text-sm text-gray-500">${this.escapeHtml(track.album_name)}</div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                         <button class="text-spotify-green hover:text-green-700 font-medium">
@@ -217,6 +290,49 @@ function tracksData() {
             `).join('');
 
             tbody.innerHTML = html;
+        },
+
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        exportToCSV() {
+            const headers = ['Track Name', 'Artist', 'Album', 'Track URI'];
+            const rows = this.tracks.map(track => [
+                `"${(track.track_name || '').replace(/"/g, '""')}"`,
+                `"${(track.artist_name || '').replace(/"/g, '""')}"`,
+                `"${(track.album_name || '').replace(/"/g, '""')}"`,
+                `"${track.track_uri || ''}"`
+            ]);
+
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            this.downloadFile(csv, 'tracks.csv', 'text/csv');
+        },
+
+        exportToJSON() {
+            const data = this.tracks.map(track => ({
+                track_name: track.track_name,
+                artist_name: track.artist_name,
+                album_name: track.album_name,
+                track_uri: track.track_uri
+            }));
+
+            const json = JSON.stringify(data, null, 2);
+            this.downloadFile(json, 'tracks.json', 'application/json');
+        },
+
+        downloadFile(content, filename, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         },
 
         nextPage() {
