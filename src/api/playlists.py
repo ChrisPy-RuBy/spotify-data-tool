@@ -129,15 +129,20 @@ async def get_playlist(
 
 @router.get("/search/by-name")
 async def search_playlists_by_name(
-    query: str, loader: DataLoader = Depends(get_data_loader)
-) -> List[dict]:
-    """Search playlists by name.
+    query: str,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    loader: DataLoader = Depends(get_data_loader),
+) -> dict:
+    """Search playlists by name with pagination.
 
     Args:
         query: Search query string
+        limit: Maximum number of playlists to return (optional)
+        offset: Number of playlists to skip (default: 0)
 
     Returns:
-        List of matching playlists
+        Dictionary with matching playlists and metadata
     """
     playlists_data = loader.load_playlists_raw()
     all_playlists = playlists_data.get("playlists", [])
@@ -150,6 +155,7 @@ async def search_playlists_by_name(
         if query_lower in name.lower():
             items = playlist.get("items", [])
             track_count = sum(1 for item in items if item.get("track"))
+            episode_count = sum(1 for item in items if item.get("episode"))
 
             matching_playlists.append(
                 {
@@ -157,7 +163,21 @@ async def search_playlists_by_name(
                     "last_modified_date": playlist.get("lastModifiedDate", "Unknown"),
                     "total_items": len(items),
                     "track_count": track_count,
+                    "episode_count": episode_count,
                 }
             )
 
-    return matching_playlists
+    # Apply pagination
+    total = len(matching_playlists)
+    playlists_slice = matching_playlists[offset:]
+    if limit:
+        playlists_slice = playlists_slice[:limit]
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "count": len(playlists_slice),
+        "query": query,
+        "playlists": playlists_slice,
+    }

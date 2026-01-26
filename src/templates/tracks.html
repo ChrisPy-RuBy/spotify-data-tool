@@ -10,26 +10,45 @@
         <p class="text-gray-600">Search and explore all your tracks</p>
     </div>
 
-    <!-- Search Bar -->
+    <!-- Search and Filter Bar -->
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div class="flex items-center space-x-4">
+        <div class="flex flex-col lg:flex-row gap-4">
+            <!-- Search Input -->
             <div class="flex-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
                 <input
                     type="text"
                     x-model="searchQuery"
-                    @input.debounce.500ms="searchTracks()"
+                    @input.debounce.500ms="currentPage = 0; searchTracks()"
                     placeholder="Search tracks by name or artist..."
                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-spotify-green focus:border-transparent"
                 />
             </div>
-            <button
-                @click="searchQuery = ''; loadTracks()"
-                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors duration-200">
-                Clear
-            </button>
+            <!-- Album Filter -->
+            <div class="lg:w-64">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Filter by Album</label>
+                <input
+                    type="text"
+                    x-model="albumFilter"
+                    @input.debounce.500ms="currentPage = 0; searchTracks()"
+                    placeholder="Enter album name..."
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-spotify-green focus:border-transparent"
+                />
+            </div>
+            <!-- Clear Button -->
+            <div class="flex items-end">
+                <button
+                    @click="searchQuery = ''; albumFilter = ''; currentPage = 0; loadTracks()"
+                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors duration-200">
+                    Clear All
+                </button>
+            </div>
         </div>
-        <p class="text-sm text-gray-500 mt-2">
-            Showing <span x-text="tracks.length"></span> of <span x-text="totalTracks.toLocaleString()"></span> tracks
+        <p class="text-sm text-gray-500 mt-3">
+            <span x-text="(searchQuery || albumFilter) ? 'Found' : 'Showing'"></span>
+            <span x-text="totalTracks.toLocaleString()"></span> tracks
+            <span x-show="searchQuery"> matching "<span x-text="searchQuery"></span>"</span>
+            <span x-show="albumFilter"> in album "<span x-text="albumFilter"></span>"</span>
         </p>
     </div>
 
@@ -65,7 +84,7 @@
     </div>
 
     <!-- Pagination -->
-    <div x-show="!searchQuery && totalTracks > pageSize" class="mt-8 flex justify-center items-center space-x-4">
+    <div x-show="totalTracks > pageSize" class="mt-8 flex justify-center items-center space-x-4">
         <button
             @click="previousPage()"
             :disabled="currentPage === 0"
@@ -141,6 +160,7 @@ function tracksData() {
     return {
         tracks: [],
         searchQuery: '',
+        albumFilter: '',
         currentPage: 0,
         pageSize: 50,
         totalTracks: 0,
@@ -164,18 +184,33 @@ function tracksData() {
         },
 
         async searchTracks() {
-            if (this.searchQuery.trim() === '') {
+            // If no search or filter, load all tracks
+            if (this.searchQuery.trim() === '' && this.albumFilter.trim() === '') {
                 this.loadTracks();
                 return;
             }
 
             this.loading = true;
-            const response = await fetch(`/api/tracks/search?query=${encodeURIComponent(this.searchQuery)}&limit=100`);
+            const offset = this.currentPage * this.pageSize;
+
+            // Build query parameters
+            let url;
+            if (this.searchQuery.trim() !== '') {
+                // Use search endpoint with optional album filter
+                url = `/api/tracks/search?query=${encodeURIComponent(this.searchQuery)}&limit=${this.pageSize}&offset=${offset}`;
+                if (this.albumFilter.trim() !== '') {
+                    url += `&album=${encodeURIComponent(this.albumFilter)}`;
+                }
+            } else {
+                // Use filter endpoint for album-only filtering
+                url = `/api/tracks/filter?limit=${this.pageSize}&offset=${offset}&album=${encodeURIComponent(this.albumFilter)}`;
+            }
+
+            const response = await fetch(url);
             const data = await response.json();
 
-            this.tracks = data;
-            this.totalTracks = data.length;
-            this.currentPage = 0;
+            this.tracks = data.tracks;
+            this.totalTracks = data.total;
             this.loading = false;
             this.renderTracks();
         },
@@ -194,7 +229,7 @@ function tracksData() {
                 return;
             }
 
-            const offset = this.searchQuery ? 0 : this.currentPage * this.pageSize;
+            const offset = this.currentPage * this.pageSize;
             const html = this.tracks.map((track, index) => `
                 <tr class="hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
                     @click="viewTrack('${track.track_uri}')">
@@ -222,7 +257,11 @@ function tracksData() {
         nextPage() {
             if ((this.currentPage + 1) * this.pageSize < this.totalTracks) {
                 this.currentPage++;
-                this.loadTracks();
+                if (this.searchQuery.trim() !== '' || this.albumFilter.trim() !== '') {
+                    this.searchTracks();
+                } else {
+                    this.loadTracks();
+                }
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         },
@@ -230,7 +269,11 @@ function tracksData() {
         previousPage() {
             if (this.currentPage > 0) {
                 this.currentPage--;
-                this.loadTracks();
+                if (this.searchQuery.trim() !== '' || this.albumFilter.trim() !== '') {
+                    this.searchTracks();
+                } else {
+                    this.loadTracks();
+                }
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         },
