@@ -3,6 +3,56 @@
  * Global utilities and helper functions
  */
 
+// API Response Cache with TTL
+class APICache {
+    constructor(defaultTTL = 5 * 60 * 1000) { // 5 minutes default
+        this.cache = new Map();
+        this.defaultTTL = defaultTTL;
+    }
+
+    set(key, value, ttl = this.defaultTTL) {
+        const expiry = Date.now() + ttl;
+        this.cache.set(key, { value, expiry });
+    }
+
+    get(key) {
+        const item = this.cache.get(key);
+        if (!item) return null;
+        if (Date.now() > item.expiry) {
+            this.cache.delete(key);
+            return null;
+        }
+        return item.value;
+    }
+
+    has(key) {
+        return this.get(key) !== null;
+    }
+
+    delete(key) {
+        this.cache.delete(key);
+    }
+
+    clear() {
+        this.cache.clear();
+    }
+
+    // Get cache stats
+    stats() {
+        let valid = 0;
+        let expired = 0;
+        const now = Date.now();
+        this.cache.forEach((item) => {
+            if (now > item.expiry) expired++;
+            else valid++;
+        });
+        return { valid, expired, total: this.cache.size };
+    }
+}
+
+// Global cache instance
+window.apiCache = new APICache();
+
 // Global utilities object
 window.SpotifyDataTool = {
     /**
@@ -119,6 +169,49 @@ window.SpotifyDataTool = {
             this.showToast('Failed to fetch data', 'error');
             throw error;
         }
+    },
+
+    /**
+     * Fetch with caching support
+     * @param {string} url - The URL to fetch
+     * @param {object} options - Fetch options
+     * @param {number} ttl - Cache TTL in milliseconds (default: 5 minutes)
+     * @param {boolean} forceRefresh - Force bypass cache
+     */
+    async fetchCached(url, options = {}, ttl = 5 * 60 * 1000, forceRefresh = false) {
+        const cacheKey = `${options.method || 'GET'}:${url}`;
+
+        // Check cache first (unless force refresh)
+        if (!forceRefresh) {
+            const cached = window.apiCache.get(cacheKey);
+            if (cached) {
+                console.log(`Cache hit: ${url}`);
+                return cached;
+            }
+        }
+
+        console.log(`Cache miss: ${url}`);
+        const data = await this.fetchAPI(url, options);
+
+        // Cache the response
+        window.apiCache.set(cacheKey, data, ttl);
+
+        return data;
+    },
+
+    /**
+     * Clear all cached API responses
+     */
+    clearCache() {
+        window.apiCache.clear();
+        this.showToast('Cache cleared', 'info');
+    },
+
+    /**
+     * Get cache statistics
+     */
+    getCacheStats() {
+        return window.apiCache.stats();
     },
 
     /**

@@ -82,19 +82,40 @@
                     • Last modified: <span x-text="formatDate(selectedPlaylist?.last_modified_date)"></span>
                 </p>
             </div>
-            <div class="p-6 overflow-y-auto max-h-96">
+            <div class="p-6 overflow-y-auto max-h-96" @scroll="$el.scrollTop + $el.clientHeight >= $el.scrollHeight - 50 && loadMoreTracks()">
                 <template x-if="selectedPlaylist?.tracks && selectedPlaylist.tracks.length > 0">
-                    <div class="space-y-2">
-                        <template x-for="(track, index) in selectedPlaylist.tracks" :key="track.track_uri">
-                            <div class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded">
-                                <div class="flex items-center space-x-3 flex-1">
-                                    <span class="text-gray-400 font-medium w-8" x-text="index + 1"></span>
-                                    <div class="flex-1">
-                                        <div class="text-gray-800 font-medium" x-text="track.track_name"></div>
-                                        <div class="text-gray-500 text-sm" x-text="track.artist_name"></div>
+                    <div>
+                        <div class="space-y-2">
+                            <template x-for="(track, index) in visibleTracks" :key="track.track_uri + index">
+                                <div class="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded">
+                                    <div class="flex items-center space-x-3 flex-1">
+                                        <span class="text-gray-400 font-medium w-8" x-text="index + 1"></span>
+                                        <div class="flex-1">
+                                            <div class="text-gray-800 font-medium" x-text="track.track_name"></div>
+                                            <div class="text-gray-500 text-sm" x-text="track.artist_name"></div>
+                                        </div>
                                     </div>
+                                    <div class="text-gray-400 text-sm" x-text="track.album_name"></div>
                                 </div>
-                                <div class="text-gray-400 text-sm" x-text="track.album_name"></div>
+                            </template>
+                        </div>
+                        <!-- Load more indicator -->
+                        <template x-if="hasMoreTracks">
+                            <div class="text-center py-4">
+                                <template x-if="loadingMore">
+                                    <div class="flex items-center justify-center space-x-2 text-gray-500">
+                                        <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span>Loading more...</span>
+                                    </div>
+                                </template>
+                                <template x-if="!loadingMore">
+                                    <button @click="loadMoreTracks()" class="text-spotify-green hover:text-green-700 text-sm font-medium">
+                                        Load more tracks (<span x-text="selectedPlaylist.tracks.length - visibleTracksCount"></span> remaining)
+                                    </button>
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -118,6 +139,9 @@ function playlistsData() {
         pageSize: 12,
         totalPlaylists: 0,
         selectedPlaylist: null,
+        // Lazy loading for modal tracks
+        visibleTracksCount: 50,
+        loadingMore: false,
 
         init() {
             this.loadPlaylists();
@@ -125,8 +149,10 @@ function playlistsData() {
 
         async loadPlaylists() {
             const offset = this.currentPage * this.pageSize;
-            const response = await fetch(`/api/playlists/?limit=${this.pageSize}&offset=${offset}`);
-            const data = await response.json();
+            const url = `/api/playlists/?limit=${this.pageSize}&offset=${offset}`;
+
+            // Use cached fetch
+            const data = await window.SpotifyDataTool.fetchCached(url);
 
             this.playlists = data.playlists;
             this.totalPlaylists = data.total;
@@ -139,8 +165,10 @@ function playlistsData() {
                 return;
             }
 
-            const response = await fetch(`/api/playlists/search/by-name?query=${encodeURIComponent(this.searchQuery)}`);
-            const data = await response.json();
+            const url = `/api/playlists/search/by-name?query=${encodeURIComponent(this.searchQuery)}`;
+
+            // Use cached fetch for search results
+            const data = await window.SpotifyDataTool.fetchCached(url, {}, 2 * 60 * 1000);
 
             this.playlists = data;
             this.totalPlaylists = data.length;
@@ -149,9 +177,39 @@ function playlistsData() {
         },
 
         async viewPlaylist(playlistName) {
-            const response = await fetch(`/api/playlists/${encodeURIComponent(playlistName)}`);
-            const data = await response.json();
+            const url = `/api/playlists/${encodeURIComponent(playlistName)}`;
+
+            // Cache playlist details for 10 minutes
+            const data = await window.SpotifyDataTool.fetchCached(url, {}, 10 * 60 * 1000);
             this.selectedPlaylist = data;
+            this.visibleTracksCount = 50; // Reset lazy load counter
+        },
+
+        loadMoreTracks() {
+            if (this.selectedPlaylist && this.visibleTracksCount < this.selectedPlaylist.tracks.length) {
+                this.loadingMore = true;
+                // Simulate async to show loading state
+                setTimeout(() => {
+                    this.visibleTracksCount += 50;
+                    this.loadingMore = false;
+                }, 100);
+            }
+        },
+
+        get visibleTracks() {
+            if (!this.selectedPlaylist?.tracks) return [];
+            return this.selectedPlaylist.tracks.slice(0, this.visibleTracksCount);
+        },
+
+        get hasMoreTracks() {
+            if (!this.selectedPlaylist?.tracks) return false;
+            return this.visibleTracksCount < this.selectedPlaylist.tracks.length;
+        },
+
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
         },
 
         renderPlaylists() {
@@ -165,7 +223,7 @@ function playlistsData() {
             const html = this.playlists.map(playlist => `
                 <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
                      @click="viewPlaylist('${playlist.name.replace(/'/g, "\\'")}')">
-                    <h3 class="text-xl font-semibold text-gray-800 mb-3 truncate">${playlist.name}</h3>
+                    <h3 class="text-xl font-semibold text-gray-800 mb-3 truncate">${this.escapeHtml(playlist.name)}</h3>
                     <div class="space-y-2 text-sm text-gray-600">
                         <div class="flex items-center space-x-2">
                             <svg class="w-4 h-4 text-spotify-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">

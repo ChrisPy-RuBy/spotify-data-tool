@@ -146,20 +146,61 @@ function tracksData() {
         totalTracks: 0,
         selectedTrack: null,
         loading: true,
+        // Virtual scrolling state
+        visibleStart: 0,
+        visibleCount: 20,
+        rowHeight: 53, // Approximate row height in pixels
+        // Debounce timer
+        searchDebounceTimer: null,
 
         init() {
             this.loadTracks();
+            // Setup virtual scroll listener
+            this.setupVirtualScroll();
+        },
+
+        setupVirtualScroll() {
+            const container = document.querySelector('.overflow-x-auto');
+            if (container) {
+                container.addEventListener('scroll', this.debounce(() => {
+                    this.updateVisibleRows();
+                }, 50));
+            }
+        },
+
+        debounce(func, wait) {
+            let timeout;
+            return (...args) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        },
+
+        updateVisibleRows() {
+            const container = document.querySelector('.overflow-x-auto');
+            if (!container) return;
+
+            const scrollTop = container.scrollTop;
+            const containerHeight = container.clientHeight;
+
+            this.visibleStart = Math.floor(scrollTop / this.rowHeight);
+            this.visibleCount = Math.ceil(containerHeight / this.rowHeight) + 5; // Buffer
+
+            this.renderTracks();
         },
 
         async loadTracks() {
             this.loading = true;
             const offset = this.currentPage * this.pageSize;
-            const response = await fetch(`/api/tracks/?limit=${this.pageSize}&offset=${offset}`);
-            const data = await response.json();
+            const url = `/api/tracks/?limit=${this.pageSize}&offset=${offset}`;
+
+            // Use cached fetch
+            const data = await window.SpotifyDataTool.fetchCached(url);
 
             this.tracks = data.tracks;
             this.totalTracks = data.total;
             this.loading = false;
+            this.visibleStart = 0;
             this.renderTracks();
         },
 
@@ -170,20 +211,31 @@ function tracksData() {
             }
 
             this.loading = true;
-            const response = await fetch(`/api/tracks/search?query=${encodeURIComponent(this.searchQuery)}&limit=100`);
-            const data = await response.json();
+            const url = `/api/tracks/search?query=${encodeURIComponent(this.searchQuery)}&limit=100`;
+
+            // Use cached fetch for search results too
+            const data = await window.SpotifyDataTool.fetchCached(url, {}, 2 * 60 * 1000); // 2 min cache for search
 
             this.tracks = data;
             this.totalTracks = data.length;
             this.currentPage = 0;
             this.loading = false;
+            this.visibleStart = 0;
             this.renderTracks();
         },
 
         async viewTrack(trackUri) {
-            const response = await fetch(`/api/tracks/${encodeURIComponent(trackUri)}`);
-            const data = await response.json();
+            const url = `/api/tracks/${encodeURIComponent(trackUri)}`;
+
+            // Cache track details for 10 minutes
+            const data = await window.SpotifyDataTool.fetchCached(url, {}, 10 * 60 * 1000);
             this.selectedTrack = data;
+        },
+
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
         },
 
         renderTracks() {
@@ -195,18 +247,38 @@ function tracksData() {
             }
 
             const offset = this.searchQuery ? 0 : this.currentPage * this.pageSize;
-            const html = this.tracks.map((track, index) => `
+
+            // For virtual scrolling, only render visible rows + buffer
+            const startIdx = Math.max(0, this.visibleStart - 5);
+            const endIdx = Math.min(this.tracks.length, this.visibleStart + this.visibleCount + 5);
+            const visibleTracks = this.tracks.slice(startIdx, endIdx);
+
+            // Add spacer for virtual scrolling
+            const topSpacer = startIdx * this.rowHeight;
+            const bottomSpacer = (this.tracks.length - endIdx) * this.rowHeight;
+
+            let html = '';
+
+            // Top spacer row
+            if (topSpacer > 0) {
+                html += `<tr style="height: ${topSpacer}px"><td colspan="5"></td></tr>`;
+            }
+
+            // Visible rows
+            html += visibleTracks.map((track, index) => {
+                const actualIndex = startIdx + index;
+                return `
                 <tr class="hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
                     @click="viewTrack('${track.track_uri}')">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${offset + index + 1}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${offset + actualIndex + 1}</td>
                     <td class="px-6 py-4">
-                        <div class="text-sm font-medium text-gray-900">${track.track_name}</div>
+                        <div class="text-sm font-medium text-gray-900">${this.escapeHtml(track.track_name)}</div>
                     </td>
                     <td class="px-6 py-4">
-                        <div class="text-sm text-gray-700">${track.artist_name}</div>
+                        <div class="text-sm text-gray-700">${this.escapeHtml(track.artist_name)}</div>
                     </td>
                     <td class="px-6 py-4">
-                        <div class="text-sm text-gray-500">${track.album_name}</div>
+                        <div class="text-sm text-gray-500">${this.escapeHtml(track.album_name)}</div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                         <button class="text-spotify-green hover:text-green-700 font-medium">
@@ -214,7 +286,12 @@ function tracksData() {
                         </button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
+
+            // Bottom spacer row
+            if (bottomSpacer > 0) {
+                html += `<tr style="height: ${bottomSpacer}px"><td colspan="5"></td></tr>`;
+            }
 
             tbody.innerHTML = html;
         },
