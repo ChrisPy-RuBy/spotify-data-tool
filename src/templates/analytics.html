@@ -104,8 +104,8 @@ function analyticsData() {
         },
 
         async loadPlaylistChart() {
-            const response = await fetch('/api/analytics/top-tracks-by-playlist?limit=20');
-            const data = await response.json();
+            // Cache analytics for 10 minutes
+            const data = await window.SpotifyDataTool.fetchCached('/api/analytics/top-tracks-by-playlist?limit=20', {}, 10 * 60 * 1000);
 
             const ctx = document.getElementById('playlist-chart').getContext('2d');
             this.playlistChart = new Chart(ctx, {
@@ -143,8 +143,8 @@ function analyticsData() {
         },
 
         async loadPlaysChart() {
-            const response = await fetch('/api/analytics/top-tracks-by-plays?limit=20');
-            const data = await response.json();
+            // Cache analytics for 10 minutes
+            const data = await window.SpotifyDataTool.fetchCached('/api/analytics/top-tracks-by-plays?limit=20', {}, 10 * 60 * 1000);
 
             const ctx = document.getElementById('plays-chart').getContext('2d');
             this.playsChart = new Chart(ctx, {
