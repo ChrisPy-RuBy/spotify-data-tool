@@ -1,32 +1,40 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-Spotify Data Tool - A Python application for working with Spotify data (early stage development).
+Spotify Data Tool — a FastAPI web application for exploring Spotify data exports. Users upload their Spotify data dump and browse playlists, tracks, and listening analytics in a web UI.
 
-## Development Setup
-
-This project uses Python 3.13+ and appears to use uv for dependency management (based on `pyproject.toml` format).
-
-### Running the Application
+## Key Commands
 
 ```bash
-python main.py
+uv sync                 # Install dependencies
+python main.py          # Run dev server (localhost:8000)
+uv run pytest           # Run test suite
 ```
 
-### Package Management
+Pre-commit hooks run Ruff for linting and formatting on staged files.
 
-The project uses `pyproject.toml` for dependency management. Dependencies are currently empty but will need to be added as the project develops.
+## Dependencies
+
+Runtime: FastAPI, Uvicorn, Jinja2, python-multipart
+Dev: pytest, pre-commit, httpx
 
 ## Code Structure
 
-Currently minimal structure:
-- `main.py` - Entry point with basic hello world functionality
+- `main.py` — entry point, creates the FastAPI app and mounts routes/static files
+- `src/loaders.py` — parses Spotify JSON data files (playlists, streaming history, library)
+- `src/models.py` — data models
+- `src/analytics.py` — analytics computations (top tracks by playlist, by play count)
+- `src/api/` — FastAPI route handlers (`playlists.py`, `tracks.py`, `analytics.py`)
+- `src/templates/` — Jinja2 templates (`base.html`, `index.html`, `playlists.html`, `tracks.html`, `analytics.html`)
+- `static/` — CSS and JS assets
+- `tests/` — automated tests (`test_loaders.py`, `test_analytics.py`)
+- `docs/` — planning and development notes
 
-## Notes
+## Conventions
 
-- The project is in very early stages with minimal implementation
-- No test framework or linting tools configured yet
-- Virtual environment path: `.venv` (gitignored)
+- Use `uv` for all dependency management (never pip)
+- Tests go in `tests/` and are run with pytest
+- Ruff handles linting and formatting via pre-commit
