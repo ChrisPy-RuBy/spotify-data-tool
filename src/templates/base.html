@@ -49,11 +49,19 @@
                     </svg>
                     <h1 class="text-2xl font-bold">Spotify Data Tool</h1>
                 </div>
-                <div class="flex space-x-6">
+                <div class="flex items-center space-x-6">
                     <a href="/" class="hover:text-spotify-green transition-colors duration-200 {% if request.url.path == '/' %}text-spotify-green font-semibold{% endif %}">Dashboard</a>
                     <a href="/playlists" class="hover:text-spotify-green transition-colors duration-200 {% if request.url.path == '/playlists' %}text-spotify-green font-semibold{% endif %}">Playlists</a>
                     <a href="/tracks" class="hover:text-spotify-green transition-colors duration-200 {% if request.url.path == '/tracks' %}text-spotify-green font-semibold{% endif %}">Tracks</a>
                     <a href="/analytics" class="hover:text-spotify-green transition-colors duration-200 {% if request.url.path == '/analytics' %}text-spotify-green font-semibold{% endif %}">Analytics</a>
+                    <form action="/api/reset" method="post"
+                          onsubmit="return confirm('Reset data and upload a new file?');"
+                          class="inline">
+                        <button type="submit"
+                                class="text-gray-400 hover:text-red-400 transition-colors duration-200 text-sm border border-gray-600 hover:border-red-400 rounded px-2 py-1">
+                            Reset
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
