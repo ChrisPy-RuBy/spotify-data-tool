@@ -225,3 +225,21 @@ class TestResetEndpoint:
         """The upload page should not show the reset button."""
         resp = client.get("/upload")
         assert "Reset Data" not in resp.text
+
+
+class TestLifespanCleanup:
+    """Tests that server shutdown cleans up temporary data."""
+
+    def test_shutdown_cleans_up_temp_dir(self, valid_zip):
+        """Exiting the TestClient context should trigger lifespan cleanup."""
+        with TestClient(app) as client:
+            client.post(
+                "/api/upload",
+                files={"file": ("export.zip", valid_zip, "application/zip")},
+            )
+            temp_dir = app_state._temp_dir
+            assert temp_dir.exists()
+
+        # After the context manager exits, lifespan shutdown runs
+        assert not temp_dir.exists()
+        assert not app_state.is_loaded
