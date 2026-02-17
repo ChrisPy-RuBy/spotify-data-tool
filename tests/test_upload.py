@@ -172,3 +172,56 @@ class TestDataGating:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "Dashboard" in resp.text
+
+
+class TestResetEndpoint:
+    """Tests for POST /api/reset."""
+
+    def test_reset_clears_data_and_redirects(self, client, valid_zip):
+        """Resetting should clear state and redirect to /upload."""
+        client.post(
+            "/api/upload",
+            files={"file": ("export.zip", valid_zip, "application/zip")},
+        )
+        assert app_state.is_loaded
+
+        resp = client.post("/api/reset")
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/upload"
+        assert not app_state.is_loaded
+
+    def test_reset_cleans_up_temp_dir(self, client, valid_zip):
+        """Resetting should remove the temporary extraction directory."""
+        client.post(
+            "/api/upload",
+            files={"file": ("export.zip", valid_zip, "application/zip")},
+        )
+        temp_dir = app_state._temp_dir
+        assert temp_dir.exists()
+
+        client.post("/api/reset")
+
+        assert not temp_dir.exists()
+
+    def test_reset_when_no_data_loaded(self, client):
+        """Resetting with no data loaded should still redirect cleanly."""
+        resp = client.post("/api/reset")
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/upload"
+
+    def test_nav_shows_reset_button_when_data_loaded(self, client, valid_zip):
+        """The nav bar should show a reset button when data is loaded."""
+        client.post(
+            "/api/upload",
+            files={"file": ("export.zip", valid_zip, "application/zip")},
+        )
+
+        resp = client.get("/")
+        assert "Reset Data" in resp.text
+
+    def test_upload_page_hides_reset_button(self, client):
+        """The upload page should not show the reset button."""
+        resp = client.get("/upload")
+        assert "Reset Data" not in resp.text
