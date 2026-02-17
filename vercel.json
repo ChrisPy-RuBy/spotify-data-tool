@@ -3,7 +3,7 @@
   "builds": [
     {
       "src": "main.py",
-      "use": "@vercel/uvicorn"
+      "use": "@vercel/python"
     }
   ],
   "routes": [
