@@ -11,6 +11,9 @@ dependencies = [
     "python-multipart>=0.0.6",
 ]
 
+[tool.vercel.scripts]
+build = "python main.py"
+
 [dependency-groups]
 dev = [
     "pytest>=7.0.0",
