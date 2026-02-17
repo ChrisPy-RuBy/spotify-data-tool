@@ -2,7 +2,7 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from src.analytics import (
     calculate_listening_time_stats,
@@ -17,11 +17,11 @@ from src.loaders import DataLoader
 router = APIRouter()
 
 
-def get_data_loader() -> DataLoader:
+def get_data_loader(request: Request) -> DataLoader:
     """Dependency to get data loader from main app."""
     from main import get_data_loader as _get
 
-    return _get()
+    return _get(request)
 
 
 @router.get("/overview")
