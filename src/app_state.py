@@ -48,7 +48,13 @@ class AppState:
 
         data_dir = session_data["data_dir"]
         if not data_dir.exists():
-            logger.warning("Data directory %s no longer exists for session %s", data_dir, session_id)
+            logger.warning(
+                "Data directory %s no longer exists for session %s, cleaning up session",
+                data_dir,
+                session_id,
+            )
+            # Clean up invalid session
+            session_manager.delete_session(session_id)
             return None
 
         # Create and cache loader

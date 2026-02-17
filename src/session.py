@@ -15,6 +15,20 @@ from itsdangerous import BadSignature, URLSafeSerializer
 
 logger = logging.getLogger(__name__)
 
+
+def is_serverless_environment() -> bool:
+    """Check if running in a serverless environment.
+
+    Returns:
+        True if running on Vercel, AWS Lambda, or similar serverless platforms
+    """
+    return bool(
+        os.environ.get("VERCEL")
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        or os.environ.get("FUNCTIONS_WORKER_RUNTIME")  # Azure Functions
+    )
+
+
 # Secret key for signing session cookies
 # IMPORTANT: In production/serverless environments, SESSION_SECRET_KEY MUST be set
 # as an environment variable to ensure consistency across all instances.
@@ -22,7 +36,7 @@ logger = logging.getLogger(__name__)
 # session cookies to be invalid across instances.
 SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
 if not SECRET_KEY:
-    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    if is_serverless_environment():
         logger.error(
             "SESSION_SECRET_KEY environment variable is required in serverless deployments!"
         )

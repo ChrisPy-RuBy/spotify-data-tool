@@ -25,7 +25,7 @@ from fastapi.templating import Jinja2Templates
 
 from src.api import analytics, playlists, tracks
 from src.app_state import AppState
-from src.session import sign_session_id, verify_session_id
+from src.session import is_serverless_environment, sign_session_id, verify_session_id
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 
@@ -232,7 +232,7 @@ async def upload_spotify_data(file: UploadFile):
     # Set secure flag based on environment
     # In production (HTTPS), cookies should be secure
     # In local development (HTTP), secure must be False
-    is_production = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    is_production = is_serverless_environment()
     
     response.set_cookie(
         key="session_id",
@@ -240,7 +240,7 @@ async def upload_spotify_data(file: UploadFile):
         httponly=True,
         secure=is_production,  # Only send over HTTPS in production
         samesite="lax",  # CSRF protection
-        max_age=86400 * 7,  # 7 days
+        max_age=86400 * 7,  # 7 days - cookie-based expiration for stateless serverless
     )
     return response
 

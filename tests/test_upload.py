@@ -126,7 +126,7 @@ class TestUploadEndpoint:
 
     def test_upload_replaces_previous_data(self, client, valid_zip):
         """Uploading a second time should create a new session.
-        
+
         Note: Each upload creates a separate session with its own temp directory.
         Old sessions are only cleaned up on server shutdown or explicit reset.
         In production, consider implementing session expiration and cleanup.
@@ -267,7 +267,12 @@ class TestLifespanCleanup:
     """Tests that server shutdown cleans up temporary data."""
 
     def test_shutdown_cleans_up_temp_dir(self, valid_zip):
-        """Manual cleanup should remove temporary directories."""
+        """Test that manual cleanup removes temporary directories.
+
+        In a real shutdown scenario, the lifespan handler would call
+        cleanup_all_sessions automatically. This test verifies the
+        cleanup mechanism works correctly.
+        """
         temp_dir = None
         from src.session import session_manager
         
