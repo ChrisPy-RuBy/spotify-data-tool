@@ -35,6 +35,16 @@ The app will be available at `http://localhost:8000`.
 uv run pytest
 ```
 
+## Deployment
+
+For production deployment (Vercel, AWS Lambda, Azure Functions, etc.), see [DEPLOYMENT.md](DEPLOYMENT.md) for:
+- Session-based state management setup
+- Required environment variables
+- Platform-specific instructions
+- Security considerations
+
+**Important**: Set the `SESSION_SECRET_KEY` environment variable for all serverless deployments.
+
 ## Project structure
 
 ```
