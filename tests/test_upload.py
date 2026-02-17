@@ -119,7 +119,7 @@ class TestUploadEndpoint:
 
 
 class TestDataGating:
-    """Tests that API routes require uploaded data."""
+    """Tests that routes require uploaded data."""
 
     def test_api_returns_403_without_upload(self, client):
         """API endpoints should return 403 when no data is loaded."""
@@ -127,3 +127,32 @@ class TestDataGating:
 
         assert resp.status_code == 403
         assert "No data loaded" in resp.json()["error"]
+
+    def test_pages_redirect_to_upload_without_data(self, client):
+        """Page routes should redirect to /upload when no data is loaded."""
+        for path in ("/", "/playlists", "/tracks", "/analytics"):
+            resp = client.get(path)
+            assert resp.status_code == 307, f"{path} should redirect"
+            assert resp.headers["location"] == "/upload"
+
+    def test_upload_page_accessible_without_data(self, client):
+        """The upload page itself should always be accessible."""
+        resp = client.get("/upload")
+        assert resp.status_code == 200
+        assert "Upload Your Spotify Data" in resp.text
+
+    def test_health_accessible_without_data(self, client):
+        """The health endpoint should not be gated."""
+        resp = client.get("/health")
+        assert resp.status_code == 200
+
+    def test_no_redirect_after_upload(self, client, valid_zip):
+        """Pages should render normally after data is uploaded."""
+        client.post(
+            "/api/upload",
+            files={"file": ("export.zip", valid_zip, "application/zip")},
+        )
+
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "Dashboard" in resp.text

@@ -42,6 +42,20 @@ def get_data_loader():
     return app_state.loader
 
 
+# Middleware: redirect to /upload when no data is loaded
+UPLOAD_ALLOWED_PREFIXES = ("/upload", "/static", "/api/", "/health")
+
+
+@app.middleware("http")
+async def require_data(request: Request, call_next):
+    """Redirect to upload page if no data has been loaded yet."""
+    if not app_state.is_loaded and not any(
+        request.url.path.startswith(p) for p in UPLOAD_ALLOWED_PREFIXES
+    ):
+        return RedirectResponse(url="/upload")
+    return await call_next(request)
+
+
 # Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -134,6 +148,12 @@ async def upload_spotify_data(file: UploadFile):
 
 
 # Page routes
+@app.get("/upload", response_class=HTMLResponse)
+async def upload_page(request: Request):
+    """Upload page — shown when no data is loaded."""
+    return templates.TemplateResponse("upload.html", {"request": request})
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Home page / dashboard."""
