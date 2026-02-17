@@ -1,9 +1,12 @@
 """Application state management for uploaded Spotify data."""
 
+import logging
 import shutil
 from pathlib import Path
 
 from src.loaders import DataLoader
+
+logger = logging.getLogger(__name__)
 
 
 class AppState:
@@ -23,15 +26,18 @@ class AppState:
         self._cleanup_temp()
         self._temp_dir = extract_root or data_dir
         self.loader = DataLoader(data_dir)
+        logger.info("State loaded from %s", data_dir)
 
     def reset(self):
         """Clear the current dataset and clean up temporary files."""
+        logger.info("Resetting application state")
         self._cleanup_temp()
         self.loader = None
 
     def _cleanup_temp(self):
         """Remove the temporary directory if it exists."""
         if self._temp_dir and self._temp_dir.exists():
+            logger.info("Cleaning up temp directory %s", self._temp_dir)
             shutil.rmtree(self._temp_dir)
             self._temp_dir = None
 

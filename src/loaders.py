@@ -6,9 +6,13 @@ in-memory caching to avoid repeated parsing.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional
-from src.models import PlaylistsData, StreamingEvent, LibraryData
+
+from src.models import LibraryData, PlaylistsData, StreamingEvent
+
+logger = logging.getLogger(__name__)
 
 
 class DataLoader:
@@ -38,6 +42,8 @@ class DataLoader:
         if not self._data_dir.is_dir():
             raise NotADirectoryError(f"Path is not a directory: {self._data_dir}")
 
+        logger.info("DataLoader initialized with %s", self._data_dir)
+
     def load_playlists(self) -> PlaylistsData:
         """
         Load playlist data from Playlist1.json.json.
@@ -57,6 +63,7 @@ class DataLoader:
             if not playlist_file.exists():
                 raise FileNotFoundError(f"Playlist file not found: {playlist_file}")
 
+            logger.info("Loading playlists from %s", playlist_file)
             with open(playlist_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
@@ -111,6 +118,9 @@ class DataLoader:
                     f"No streaming history files found in {self._data_dir}"
                 )
 
+            logger.info(
+                "Loading streaming history from %d file(s)", len(streaming_files)
+            )
             all_events = []
             for file_path in streaming_files:
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -166,6 +176,7 @@ class DataLoader:
             if not library_file.exists():
                 raise FileNotFoundError(f"Library file not found: {library_file}")
 
+            logger.info("Loading library from %s", library_file)
             with open(library_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
