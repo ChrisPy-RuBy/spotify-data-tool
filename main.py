@@ -4,21 +4,25 @@ A web application for visualizing and exploring Spotify data with interactive
 charts and dashboards.
 """
 
+import tempfile
+import zipfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from src.api import analytics, playlists, tracks
-from src.loaders import DataLoader
+from src.app_state import AppState
+
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Spotify Data Tool",
     description="Visualize and explore your Spotify data",
-    version="0.1.0"
+    version="0.1.0",
 )
 
 # Mount static files
@@ -27,15 +31,15 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Configure Jinja2 templates
 templates = Jinja2Templates(directory="src/templates")
 
-# Initialize singleton data loader
-data_dir = Path("data")
-data_loader = DataLoader(data_dir)
+# Application state — replaces the old global DataLoader singleton
+app_state = AppState()
 
 
-# Dependency to get data loader
-def get_data_loader() -> DataLoader:
-    """Get the singleton data loader instance."""
-    return data_loader
+def get_data_loader():
+    """Get the DataLoader from app state, or raise if no data is loaded."""
+    if not app_state.is_loaded:
+        raise HTTPException(status_code=403, detail="No data loaded")
+    return app_state.loader
 
 
 # Exception handlers
@@ -79,6 +83,56 @@ app.include_router(tracks.router, prefix="/api/tracks", tags=["tracks"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 
 
+# Upload endpoint
+@app.post("/api/upload")
+async def upload_spotify_data(file: UploadFile):
+    """Accept a Spotify data export zip file, validate, extract, and load it."""
+    # Read file contents and check size
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)}MB.",
+        )
+
+    # Write to a temporary file so zipfile can work with it
+    tmp_zip = Path(tempfile.mktemp(suffix=".zip"))
+    try:
+        tmp_zip.write_bytes(contents)
+
+        if not zipfile.is_zipfile(tmp_zip):
+            raise HTTPException(
+                status_code=400, detail="Uploaded file is not a valid zip archive."
+            )
+
+        with zipfile.ZipFile(tmp_zip, "r") as zf:
+            # Check for path traversal
+            for name in zf.namelist():
+                if ".." in name or name.startswith("/"):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Zip contains unsafe path: {name}",
+                    )
+
+            # Validate required files
+            if "Playlist1.json.json" not in zf.namelist():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid Spotify export: missing Playlist1.json.json",
+                )
+
+            # Extract to a temporary directory
+            extract_dir = Path(tempfile.mkdtemp(prefix="spotify_data_"))
+            zf.extractall(extract_dir)
+    finally:
+        tmp_zip.unlink(missing_ok=True)
+
+    # Load the extracted data into AppState
+    app_state.load_from_directory(extract_dir)
+
+    return RedirectResponse(url="/", status_code=303)
+
+
 # Page routes
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -113,4 +167,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

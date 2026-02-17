@@ -19,8 +19,9 @@ router = APIRouter()
 
 def get_data_loader() -> DataLoader:
     """Dependency to get data loader from main app."""
-    from main import data_loader
-    return data_loader
+    from main import get_data_loader as _get
+
+    return _get()
 
 
 @router.get("/overview")
