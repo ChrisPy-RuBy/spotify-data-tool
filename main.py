@@ -5,6 +5,7 @@ charts and dashboards.
 """
 
 import logging
+import os
 import tempfile
 import zipfile
 from collections.abc import AsyncIterator
@@ -227,11 +228,17 @@ async def upload_spotify_data(file: UploadFile):
     # Create response with session cookie
     response = RedirectResponse(url="/", status_code=303)
     signed_session = sign_session_id(session_id)
+    
+    # Set secure flag based on environment
+    # In production (HTTPS), cookies should be secure
+    # In local development (HTTP), secure must be False
+    is_production = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    
     response.set_cookie(
         key="session_id",
         value=signed_session,
         httponly=True,
-        secure=True,  # Only send over HTTPS
+        secure=is_production,  # Only send over HTTPS in production
         samesite="lax",  # CSRF protection
         max_age=86400 * 7,  # 7 days
     )

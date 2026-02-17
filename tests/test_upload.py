@@ -125,7 +125,12 @@ class TestUploadEndpoint:
         assert loader.data_directory.name == "my_spotify_data"
 
     def test_upload_replaces_previous_data(self, client, valid_zip):
-        """Uploading a second time should create a new session."""
+        """Uploading a second time should create a new session.
+        
+        Note: Each upload creates a separate session with its own temp directory.
+        Old sessions are only cleaned up on server shutdown or explicit reset.
+        In production, consider implementing session expiration and cleanup.
+        """
         resp1 = client.post(
             "/api/upload",
             files={"file": ("first.zip", valid_zip, "application/zip")},

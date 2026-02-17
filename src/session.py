@@ -8,6 +8,7 @@ track which user's data should be loaded.
 import logging
 import os
 import secrets
+import sys
 from pathlib import Path
 
 from itsdangerous import BadSignature, URLSafeSerializer
@@ -15,8 +16,24 @@ from itsdangerous import BadSignature, URLSafeSerializer
 logger = logging.getLogger(__name__)
 
 # Secret key for signing session cookies
-# In production, this should be set via environment variable
-SECRET_KEY = os.environ.get("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
+# IMPORTANT: In production/serverless environments, SESSION_SECRET_KEY MUST be set
+# as an environment variable to ensure consistency across all instances.
+# Without this, different instances will have different keys, causing
+# session cookies to be invalid across instances.
+SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
+if not SECRET_KEY:
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        logger.error(
+            "SESSION_SECRET_KEY environment variable is required in serverless deployments!"
+        )
+        sys.exit(1)
+    else:
+        # Local development fallback
+        SECRET_KEY = secrets.token_urlsafe(32)
+        logger.warning(
+            "Using randomly generated SESSION_SECRET_KEY. Set SESSION_SECRET_KEY "
+            "environment variable for production use."
+        )
 
 # Session serializer for secure cookie signing
 serializer = URLSafeSerializer(SECRET_KEY)
@@ -71,6 +88,14 @@ class SessionManager:
             del self._sessions[session_id]
             return True
         return False
+
+    def get_all_session_ids(self) -> list[str]:
+        """Get all active session IDs.
+
+        Returns:
+            List of session IDs
+        """
+        return list(self._sessions.keys())
 
     def cleanup_all_sessions(self):
         """Clean up all sessions. Called during server shutdown."""

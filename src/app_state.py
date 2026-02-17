@@ -107,7 +107,7 @@ class AppState:
         logger.info("Cleaning up all sessions")
 
         # Clean up all temp directories
-        for session_id in list(session_manager._sessions.keys()):
+        for session_id in session_manager.get_all_session_ids():
             session_data = session_manager.get_session_data(session_id)
             if session_data:
                 extract_root = session_data.get("extract_root")
