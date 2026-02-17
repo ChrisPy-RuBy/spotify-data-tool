@@ -13,10 +13,15 @@ class AppState:
         self.loader: DataLoader | None = None
         self._temp_dir: Path | None = None
 
-    def load_from_directory(self, data_dir: Path):
-        """Create a new DataLoader from an extracted data directory."""
+    def load_from_directory(self, data_dir: Path, extract_root: Path | None = None):
+        """Create a new DataLoader from an extracted data directory.
+
+        Args:
+            data_dir: Directory containing the Spotify JSON files.
+            extract_root: Top-level temp directory to clean up (defaults to data_dir).
+        """
         self._cleanup_temp()
-        self._temp_dir = data_dir
+        self._temp_dir = extract_root or data_dir
         self.loader = DataLoader(data_dir)
 
     def reset(self):

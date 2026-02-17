@@ -128,8 +128,16 @@ async def upload_spotify_data(file: UploadFile):
                         detail=f"Zip contains unsafe path: {name}",
                     )
 
-            # Validate required files
-            if "Playlist1.json.json" not in zf.namelist():
+            # Validate required files (may be nested in a subdirectory)
+            playlist_entry = None
+            for name in zf.namelist():
+                if name == "Playlist1.json.json" or name.endswith(
+                    "/Playlist1.json.json"
+                ):
+                    playlist_entry = name
+                    break
+
+            if playlist_entry is None:
                 raise HTTPException(
                     status_code=400,
                     detail="Invalid Spotify export: missing Playlist1.json.json",
@@ -138,11 +146,13 @@ async def upload_spotify_data(file: UploadFile):
             # Extract to a temporary directory
             extract_dir = Path(tempfile.mkdtemp(prefix="spotify_data_"))
             zf.extractall(extract_dir)
+
     finally:
         tmp_zip.unlink(missing_ok=True)
 
-    # Load the extracted data into AppState
-    app_state.load_from_directory(extract_dir)
+    # Point DataLoader at the directory containing the data files
+    data_dir = extract_dir / Path(playlist_entry).parent
+    app_state.load_from_directory(data_dir, extract_root=extract_dir)
 
     return RedirectResponse(url="/", status_code=303)
 

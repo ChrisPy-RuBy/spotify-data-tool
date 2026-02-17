@@ -100,6 +100,22 @@ class TestUploadEndpoint:
         assert "unsafe path" in resp.json()["error"]
         assert not app_state.is_loaded
 
+    def test_upload_nested_zip(self, client):
+        """A zip with data files inside a subdirectory should work."""
+        zip_bytes = _make_zip(
+            {"my_spotify_data/Playlist1.json.json": MINIMAL_PLAYLIST}
+        )
+
+        resp = client.post(
+            "/api/upload",
+            files={"file": ("export.zip", zip_bytes, "application/zip")},
+        )
+
+        assert resp.status_code == 303
+        assert app_state.is_loaded
+        # DataLoader should point at the subdirectory, not the extraction root
+        assert app_state.loader.data_directory.name == "my_spotify_data"
+
     def test_upload_replaces_previous_data(self, client, valid_zip):
         """Uploading a second time should replace the previous dataset."""
         client.post(
