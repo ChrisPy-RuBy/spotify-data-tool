@@ -157,6 +157,14 @@ async def upload_spotify_data(file: UploadFile):
     return RedirectResponse(url="/", status_code=303)
 
 
+# Reset endpoint
+@app.post("/api/reset")
+async def reset_data():
+    """Clear the current dataset and redirect to the upload page."""
+    app_state.reset()
+    return RedirectResponse(url="/upload", status_code=303)
+
+
 # Page routes
 @app.get("/upload", response_class=HTMLResponse)
 async def upload_page(request: Request):
