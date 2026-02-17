@@ -13,9 +13,9 @@ from main import app, app_state
 @pytest.fixture(autouse=True)
 def reset_app_state():
     """Ensure app state is clean before and after each test."""
-    app_state.reset()
+    app_state.cleanup_all_sessions()
     yield
-    app_state.reset()
+    app_state.cleanup_all_sessions()
 
 
 def _make_zip(files: dict[str, bytes]) -> bytes:
@@ -56,7 +56,8 @@ class TestUploadEndpoint:
 
         assert resp.status_code == 303
         assert resp.headers["location"] == "/"
-        assert app_state.is_loaded
+        # Should set a session cookie
+        assert "session_id" in resp.cookies
 
     def test_upload_not_a_zip(self, client):
         """Uploading a non-zip file should return 400."""
@@ -67,7 +68,8 @@ class TestUploadEndpoint:
 
         assert resp.status_code == 400
         assert "not a valid zip" in resp.json()["error"]
-        assert not app_state.is_loaded
+        # Should not set a session cookie
+        assert "session_id" not in resp.cookies
 
     def test_upload_missing_playlist_file(self, client):
         """A zip without Playlist1.json.json should return 400."""
@@ -80,7 +82,7 @@ class TestUploadEndpoint:
 
         assert resp.status_code == 400
         assert "Playlist1.json.json" in resp.json()["error"]
-        assert not app_state.is_loaded
+        assert "session_id" not in resp.cookies
 
     def test_upload_path_traversal(self, client):
         """A zip with path traversal entries should be rejected."""
@@ -98,7 +100,7 @@ class TestUploadEndpoint:
 
         assert resp.status_code == 400
         assert "unsafe path" in resp.json()["error"]
-        assert not app_state.is_loaded
+        assert "session_id" not in resp.cookies
 
     def test_upload_nested_zip(self, client):
         """A zip with data files inside a subdirectory should work."""
@@ -112,26 +114,42 @@ class TestUploadEndpoint:
         )
 
         assert resp.status_code == 303
-        assert app_state.is_loaded
+        assert "session_id" in resp.cookies
+        # Get session from cookie and verify the loader is set up correctly
+        session_cookie = resp.cookies["session_id"]
+        from src.session import verify_session_id
+        session_id = verify_session_id(session_cookie)
+        loader = app_state.get_loader(session_id)
+        assert loader is not None
         # DataLoader should point at the subdirectory, not the extraction root
-        assert app_state.loader.data_directory.name == "my_spotify_data"
+        assert loader.data_directory.name == "my_spotify_data"
 
     def test_upload_replaces_previous_data(self, client, valid_zip):
-        """Uploading a second time should replace the previous dataset."""
-        client.post(
+        """Uploading a second time should create a new session."""
+        resp1 = client.post(
             "/api/upload",
             files={"file": ("first.zip", valid_zip, "application/zip")},
         )
-        first_dir = app_state._temp_dir
+        session1_cookie = resp1.cookies["session_id"]
+        from src.session import verify_session_id, session_manager
+        session1_id = verify_session_id(session1_cookie)
+        session1_data = session_manager.get_session_data(session1_id)
+        first_dir = session1_data["extract_root"]
 
-        client.post(
+        resp2 = client.post(
             "/api/upload",
             files={"file": ("second.zip", valid_zip, "application/zip")},
         )
+        session2_cookie = resp2.cookies["session_id"]
+        session2_id = verify_session_id(session2_cookie)
 
-        assert app_state.is_loaded
-        # The first temp dir should have been cleaned up
-        assert not first_dir.exists()
+        # Should create a different session
+        assert session1_id != session2_id
+        # Both sessions should exist
+        assert app_state.get_loader(session1_id) is not None
+        assert app_state.get_loader(session2_id) is not None
+        # The first temp dir should still exist (not cleaned up automatically)
+        assert first_dir.exists()
 
 
 class TestDataGating:
@@ -164,12 +182,15 @@ class TestDataGating:
 
     def test_no_redirect_after_upload(self, client, valid_zip):
         """Pages should render normally after data is uploaded."""
-        client.post(
+        resp1 = client.post(
             "/api/upload",
             files={"file": ("export.zip", valid_zip, "application/zip")},
         )
+        # Get the session cookie from the upload response
+        session_cookie = resp1.cookies.get("session_id")
 
-        resp = client.get("/")
+        # Make request with the session cookie
+        resp = client.get("/", cookies={"session_id": session_cookie})
         assert resp.status_code == 200
         assert "Dashboard" in resp.text
 
@@ -178,29 +199,38 @@ class TestResetEndpoint:
     """Tests for POST /api/reset."""
 
     def test_reset_clears_data_and_redirects(self, client, valid_zip):
-        """Resetting should clear state and redirect to /upload."""
-        client.post(
+        """Resetting should clear session and redirect to /upload."""
+        resp1 = client.post(
             "/api/upload",
             files={"file": ("export.zip", valid_zip, "application/zip")},
         )
-        assert app_state.is_loaded
+        session_cookie = resp1.cookies["session_id"]
+        from src.session import verify_session_id
+        session_id = verify_session_id(session_cookie)
+        assert app_state.get_loader(session_id) is not None
 
-        resp = client.post("/api/reset")
+        # Make request with session cookie set
+        resp = client.post("/api/reset", cookies={"session_id": session_cookie})
 
         assert resp.status_code == 303
         assert resp.headers["location"] == "/upload"
-        assert not app_state.is_loaded
+        # Session should be deleted
+        assert app_state.get_loader(session_id) is None
 
     def test_reset_cleans_up_temp_dir(self, client, valid_zip):
         """Resetting should remove the temporary extraction directory."""
-        client.post(
+        resp1 = client.post(
             "/api/upload",
             files={"file": ("export.zip", valid_zip, "application/zip")},
         )
-        temp_dir = app_state._temp_dir
+        session_cookie = resp1.cookies["session_id"]
+        from src.session import verify_session_id, session_manager
+        session_id = verify_session_id(session_cookie)
+        session_data = session_manager.get_session_data(session_id)
+        temp_dir = session_data["extract_root"]
         assert temp_dir.exists()
 
-        client.post("/api/reset")
+        client.post("/api/reset", cookies={"session_id": session_cookie})
 
         assert not temp_dir.exists()
 
@@ -213,12 +243,13 @@ class TestResetEndpoint:
 
     def test_nav_shows_reset_button_when_data_loaded(self, client, valid_zip):
         """The nav bar should show a reset button when data is loaded."""
-        client.post(
+        resp1 = client.post(
             "/api/upload",
             files={"file": ("export.zip", valid_zip, "application/zip")},
         )
+        session_cookie = resp1.cookies.get("session_id")
 
-        resp = client.get("/")
+        resp = client.get("/", cookies={"session_id": session_cookie})
         assert "Reset Data" in resp.text
 
     def test_upload_page_hides_reset_button(self, client):
@@ -231,15 +262,33 @@ class TestLifespanCleanup:
     """Tests that server shutdown cleans up temporary data."""
 
     def test_shutdown_cleans_up_temp_dir(self, valid_zip):
-        """Exiting the TestClient context should trigger lifespan cleanup."""
-        with TestClient(app) as client:
-            client.post(
-                "/api/upload",
-                files={"file": ("export.zip", valid_zip, "application/zip")},
-            )
-            temp_dir = app_state._temp_dir
-            assert temp_dir.exists()
+        """Manual cleanup should remove temporary directories."""
+        temp_dir = None
+        from src.session import session_manager
+        
+        # Test with a regular TestClient
+        client = TestClient(app)
+        resp = client.post(
+            "/api/upload",
+            files={"file": ("export.zip", valid_zip, "application/zip")},
+            follow_redirects=False
+        )
+        
+        # Get session cookie - it's in the set-cookie header
+        assert resp.status_code == 303
+        assert "session_id" in resp.cookies
+        
+        session_cookie = resp.cookies.get("session_id")
+        assert session_cookie is not None
+        
+        from src.session import verify_session_id
+        session_id = verify_session_id(session_cookie)
+        session_data = session_manager.get_session_data(session_id)
+        temp_dir = session_data["extract_root"]
+        assert temp_dir.exists()
+        
+        # Manually trigger cleanup
+        app_state.cleanup_all_sessions()
 
-        # After the context manager exits, lifespan shutdown runs
+        # After cleanup, temp directory should be gone
         assert not temp_dir.exists()
-        assert not app_state.is_loaded

@@ -17,13 +17,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from src.api import analytics, playlists, tracks
 from src.app_state import AppState
+from src.session import sign_session_id, verify_session_id
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 
@@ -35,8 +36,8 @@ app_state = AppState()
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Clean up uploaded data when the server shuts down."""
     yield
-    logger.info("Server shutting down, cleaning up uploaded data")
-    app_state.reset()
+    logger.info("Server shutting down, cleaning up all sessions")
+    app_state.cleanup_all_sessions()
 
 
 # Initialize FastAPI app
@@ -53,24 +54,60 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Configure Jinja2 templates
 templates = Jinja2Templates(directory="src/templates")
 
-def get_data_loader():
-    """Get the DataLoader from app state, or raise if no data is loaded."""
-    if not app_state.is_loaded:
+def get_session_id(request: Request) -> str | None:
+    """Extract and verify session ID from request cookies.
+
+    Args:
+        request: The FastAPI request
+
+    Returns:
+        Session ID if valid, None otherwise
+    """
+    session_cookie = request.cookies.get("session_id")
+    if not session_cookie:
+        return None
+    return verify_session_id(session_cookie)
+
+
+def get_data_loader(request: Request):
+    """Get the DataLoader from app state based on user's session.
+
+    Args:
+        request: The FastAPI request
+
+    Returns:
+        DataLoader instance
+
+    Raises:
+        HTTPException: If no data is loaded for this session
+    """
+    session_id = get_session_id(request)
+    if not session_id:
         raise HTTPException(status_code=403, detail="No data loaded")
-    return app_state.loader
+
+    loader = app_state.get_loader(session_id)
+    if not loader:
+        raise HTTPException(status_code=403, detail="No data loaded")
+
+    return loader
 
 
-# Middleware: redirect to /upload when no data is loaded
+# Middleware: redirect to /upload when no data is loaded for this session
 UPLOAD_ALLOWED_PREFIXES = ("/upload", "/static", "/api/", "/health")
 
 
 @app.middleware("http")
 async def require_data(request: Request, call_next):
-    """Redirect to upload page if no data has been loaded yet."""
-    if not app_state.is_loaded and not any(
-        request.url.path.startswith(p) for p in UPLOAD_ALLOWED_PREFIXES
-    ):
+    """Redirect to upload page if no data has been loaded for this session."""
+    # Allow certain paths without session check
+    if any(request.url.path.startswith(p) for p in UPLOAD_ALLOWED_PREFIXES):
+        return await call_next(request)
+
+    # Check if user has a valid session with data
+    session_id = get_session_id(request)
+    if not session_id or not app_state.get_loader(session_id):
         return RedirectResponse(url="/upload")
+
     return await call_next(request)
 
 
@@ -120,7 +157,11 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"]
 # Upload endpoint
 @app.post("/api/upload")
 async def upload_spotify_data(file: UploadFile):
-    """Accept a Spotify data export zip file, validate, extract, and load it."""
+    """Accept a Spotify data export zip file, validate, extract, and load it.
+
+    Returns:
+        Response with session cookie set
+    """
     # Read file contents and check size
     contents = await file.read()
     logger.info("Upload received: %s (%d bytes)", file.filename, len(contents))
@@ -177,19 +218,45 @@ async def upload_spotify_data(file: UploadFile):
 
     # Point DataLoader at the directory containing the data files
     data_dir = extract_dir / Path(playlist_entry).parent
-    app_state.load_from_directory(data_dir, extract_root=extract_dir)
 
-    logger.info("Upload successful: data loaded from %s", data_dir)
-    return RedirectResponse(url="/", status_code=303)
+    # Create session and get session ID
+    session_id = app_state.create_session(data_dir, extract_root=extract_dir)
+
+    logger.info("Upload successful: data loaded from %s with session %s", data_dir, session_id)
+
+    # Create response with session cookie
+    response = RedirectResponse(url="/", status_code=303)
+    signed_session = sign_session_id(session_id)
+    response.set_cookie(
+        key="session_id",
+        value=signed_session,
+        httponly=True,
+        secure=True,  # Only send over HTTPS
+        samesite="lax",  # CSRF protection
+        max_age=86400 * 7,  # 7 days
+    )
+    return response
 
 
 # Reset endpoint
 @app.post("/api/reset")
-async def reset_data():
-    """Clear the current dataset and redirect to the upload page."""
+async def reset_data(request: Request):
+    """Clear the current dataset and redirect to the upload page.
+
+    Returns:
+        Response that clears the session cookie
+    """
     logger.info("Data reset requested")
-    app_state.reset()
-    return RedirectResponse(url="/upload", status_code=303)
+
+    # Delete the user's session if it exists
+    session_id = get_session_id(request)
+    if session_id:
+        app_state.delete_session(session_id)
+
+    # Create response and clear session cookie
+    response = RedirectResponse(url="/upload", status_code=303)
+    response.delete_cookie(key="session_id")
+    return response
 
 
 # Page routes

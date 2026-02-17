@@ -11,6 +11,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "uvloop>=0.22.1",
     "httptools>=0.7.1",
+    "itsdangerous>=2.1.0",
 ]
 
 [tool.vercel.scripts]

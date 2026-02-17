@@ -2,18 +2,18 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.loaders import DataLoader
 
 router = APIRouter()
 
 
-def get_data_loader() -> DataLoader:
+def get_data_loader(request: Request) -> DataLoader:
     """Dependency to get data loader from main app."""
     from main import get_data_loader as _get
 
-    return _get()
+    return _get(request)
 
 
 @router.get("/")
