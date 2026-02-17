@@ -7,6 +7,8 @@ charts and dashboards.
 import logging
 import tempfile
 import zipfile
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 logging.basicConfig(
@@ -25,11 +27,24 @@ from src.app_state import AppState
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 
+# Application state — replaces the old global DataLoader singleton
+app_state = AppState()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Clean up uploaded data when the server shuts down."""
+    yield
+    logger.info("Server shutting down, cleaning up uploaded data")
+    app_state.reset()
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Spotify Data Tool",
     description="Visualize and explore your Spotify data",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Mount static files
@@ -37,10 +52,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Configure Jinja2 templates
 templates = Jinja2Templates(directory="src/templates")
-
-# Application state — replaces the old global DataLoader singleton
-app_state = AppState()
-
 
 def get_data_loader():
     """Get the DataLoader from app state, or raise if no data is loaded."""
